@@ -1,7 +1,13 @@
 import { ApolloServer, gql } from 'apollo-server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, User, Repository } from '@prisma/client';
 import { fetchRepoDetails, fetchLatestRelease } from './services/github';
+import { IncomingMessage } from 'http';
+
 const prisma = new PrismaClient();
+
+interface Context {
+  user: User;
+}
 
 const typeDefs = gql`
   type Repository {
@@ -25,25 +31,66 @@ const typeDefs = gql`
 
   type Mutation {
     addRepository(fullName: String!): Repository!
-    markReleaseSeen(releaseId: ID!): Release!
+    markReleaseSeen(releaseId: ID!): Boolean!
     refreshAllRepositories: [Repository!]!
-    removeRepository(fullName: String!): Repository!
+    removeRepository(fullName: String!): Boolean!
   }
 `;
 
 const resolvers = {
   Query: {
-    repositories: async () => {
-      return prisma.repository.findMany({
-        include: { releases: true },
+    repositories: async (_: unknown, __: unknown, context: Context) => {
+      const { user } = context;
+      const tracked = await prisma.userRepository.findMany({
+        where: { userId: user.id },
+        include: {
+          repository: {
+            include: {
+              releases: {
+                orderBy: { publishedAt: 'desc' },
+              },
+            },
+          },
+        },
       });
+
+      return tracked.map((r) => r.repository);
     },
   },
+
+  Repository: {
+    releases: async (repo: Repository, _: unknown, context: Context) => {
+      const { user } = context;
+
+      const releases = await prisma.release.findMany({
+        where: { repositoryId: repo.id },
+        orderBy: { publishedAt: 'desc' },
+      });
+
+      const seen = await prisma.seenRelease.findMany({
+        where: {
+          userId: user.id,
+          releaseId: { in: releases.map((r) => r.id) },
+        },
+        select: { releaseId: true },
+      });
+
+      const seenSet = new Set(seen.map((s) => s.releaseId));
+
+      return releases.map((r) => ({
+        ...r,
+        seen: seenSet.has(r.id),
+      }));
+    },
+  },
+
   Mutation: {
-    addRepository: async (_: unknown, { fullName }: { fullName: string }) => {
+    addRepository: async (_: unknown, { fullName }: { fullName: string }, context: Context) => {
+      const { user } = context;
       const repoData = await fetchRepoDetails(fullName);
       const latestRelease = await fetchLatestRelease(fullName);
 
+      // Ensure repo exists globally
       const repo = await prisma.repository.upsert({
         where: { fullName },
         create: {
@@ -59,32 +106,67 @@ const resolvers = {
             : undefined,
         },
         update: {},
-        include: { releases: true },
+      });
+
+      // Connect repo to user if not already tracked
+      await prisma.userRepository.upsert({
+        where: {
+          userId_repositoryId: {
+            userId: user.id,
+            repositoryId: repo.id,
+          },
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          repositoryId: repo.id,
+        },
       });
 
       return repo;
     },
-    markReleaseSeen: async (_: unknown, { releaseId }: { releaseId: string }) => {
-      return prisma.release.update({
-        where: { id: releaseId },
-        data: { seen: true },
-      });
-    },
-    refreshAllRepositories: async () => {
-      const allRepos = await prisma.repository.findMany();
 
-      for (const repo of allRepos) {
+    markReleaseSeen: async (_: unknown, { releaseId }: { releaseId: string }, context: Context) => {
+      const { user } = context;
+
+      await prisma.seenRelease.upsert({
+        where: {
+          userId_releaseId: {
+            userId: user.id,
+            releaseId,
+          },
+        },
+        update: {},
+        create: {
+          userId: user.id,
+          releaseId,
+        },
+      });
+
+      return true;
+    },
+
+    refreshAllRepositories: async (_: unknown, __: unknown, context: Context) => {
+      const { user } = context;
+
+      const tracked = await prisma.userRepository.findMany({
+        where: { userId: user.id },
+        include: { repository: true },
+      });
+
+      for (const record of tracked) {
+        const repo = record.repository;
         const latest = await fetchLatestRelease(repo.fullName);
         if (!latest) continue;
 
-        const existing = await prisma.release.findFirst({
+        const exists = await prisma.release.findFirst({
           where: {
             repositoryId: repo.id,
             version: latest.version,
           },
         });
 
-        if (!existing) {
+        if (!exists) {
           await prisma.release.create({
             data: {
               version: latest.version,
@@ -96,34 +178,43 @@ const resolvers = {
         }
       }
 
-      return await prisma.repository.findMany({ include: { releases: true } });
+      return tracked.map((r) => r.repository);
     },
-    removeRepository: async (_: unknown, { fullName }: { fullName: string }) => {
-      const repo = await prisma.repository.findUnique({
-        where: { fullName },
-        include: { releases: true },
+
+    removeRepository: async (_: unknown, { fullName }: { fullName: string }, context: Context) => {
+      const { user } = context;
+
+      const repo = await prisma.repository.findUnique({ where: { fullName } });
+      if (!repo) return false;
+
+      await prisma.userRepository.deleteMany({
+        where: {
+          userId: user.id,
+          repositoryId: repo.id,
+        },
       });
 
-      if (!repo) {
-        throw new Error('Repository not found');
-      }
-
-      // Delete all releases first due to foreign key constraint
-      await prisma.release.deleteMany({
-        where: { repositoryId: repo.id },
-      });
-
-      // Then delete the repository
-      await prisma.repository.delete({
-        where: { fullName },
-      });
-
-      return repo;
+      return true;
     },
   },
 };
 
-const server = new ApolloServer({ typeDefs, resolvers });
+const server = new ApolloServer({
+  typeDefs,
+  resolvers,
+  context: async ({ req }: { req: IncomingMessage }) => {
+    const email = req.headers['x-user-email'] as string;
+    if (!email) throw new Error('Missing user email in header');
+
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { email },
+    });
+
+    return { user };
+  },
+});
 
 server.listen().then(({ url }) => {
   console.log(`🚀 Server ready at ${url}`);

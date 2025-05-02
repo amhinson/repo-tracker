@@ -7,21 +7,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id               String           @id @default(cuid())
+  email            String           @unique
+  trackedRepos     UserRepository[] // pivot table for repos
+  seenReleases     SeenRelease[]
+}
+
 model Repository {
-  id          String   @id @default(cuid())
+  id          String           @id @default(cuid())
   name        String
   owner       String
-  fullName    String   @unique
+  fullName    String           @unique
   description String?
   releases    Release[]
+  trackedBy   UserRepository[] // pivot table for users
+}
+
+model UserRepository {
+  id           String   @id @default(cuid())
+  userId       String
+  repositoryId String
+
+  user         User      @relation(fields: [userId], references: [id])
+  repository   Repository @relation(fields: [repositoryId], references: [id])
+
+  @@unique([userId, repositoryId])
 }
 
 model Release {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   version       String
   publishedAt   DateTime
   notes         String?
   repositoryId  String
-  repository    Repository @relation(fields: [repositoryId], references: [id])
-  seen          Boolean   @default(false)
+  repository    Repository     @relation(fields: [repositoryId], references: [id])
+  seenBy        SeenRelease[]
+}
+
+model SeenRelease {
+  id         String   @id @default(cuid())
+  userId     String
+  releaseId  String
+
+  user       User     @relation(fields: [userId], references: [id])
+  release    Release  @relation(fields: [releaseId], references: [id])
+
+  @@unique([userId, releaseId])
 }

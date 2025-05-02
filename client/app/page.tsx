@@ -34,10 +34,7 @@ const GET_REPOSITORIES = gql`
 
 const MARK_RELEASE_SEEN = gql`
   mutation MarkReleaseSeen($releaseId: ID!) {
-    markReleaseSeen(releaseId: $releaseId) {
-      id
-      seen
-    }
+    markReleaseSeen(releaseId: $releaseId)
   }
 `;
 
@@ -67,10 +64,18 @@ const REMOVE_REPOSITORY = gql`
 export default function Home() {
   const { data: session, status } = useSession();
   const { data, loading, error } = useQuery<GetRepositoriesResponse>(GET_REPOSITORIES, {
-    skip: !session,
+    skip: !session?.user?.email,
+    onError: (error) => {
+      if (error.message.includes('Missing user email')) {
+        signOut();
+      }
+    },
   });
   const [markSeen] = useMutation<MarkReleaseSeenResponse, MarkReleaseSeenVariables>(
     MARK_RELEASE_SEEN,
+    {
+      refetchQueries: ['GetRepositories'],
+    },
   );
   const [refreshAll, { loading: refreshing }] = useMutation<RefreshAllResponse>(REFRESH_ALL, {
     refetchQueries: ['GetRepositories'],

@@ -18,10 +18,7 @@ export interface GetRepositoriesResponse {
 }
 
 export interface MarkReleaseSeenResponse {
-  markReleaseSeen: {
-    id: string;
-    seen: boolean;
-  };
+  markReleaseSeen: boolean;
 }
 
 export interface MarkReleaseSeenVariables {
