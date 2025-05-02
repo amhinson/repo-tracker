@@ -30,3 +30,13 @@ export interface MarkReleaseSeenVariables {
 export interface RefreshAllResponse {
   refreshAllRepositories: Repository[];
 }
+
+export interface RemoveRepositoryResponse {
+  removeRepository: {
+    id: string;
+  };
+}
+
+export interface RemoveRepositoryVariables {
+  fullName: string;
+}

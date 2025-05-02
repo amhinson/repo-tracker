@@ -6,6 +6,8 @@ import {
   MarkReleaseSeenResponse,
   MarkReleaseSeenVariables,
   RefreshAllResponse,
+  RemoveRepositoryResponse,
+  RemoveRepositoryVariables,
 } from './types';
 import AddRepoForm from './components/AddRepoForm';
 
@@ -49,6 +51,14 @@ const REFRESH_ALL = gql`
   }
 `;
 
+const REMOVE_REPOSITORY = gql`
+  mutation RemoveRepository($fullName: String!) {
+    removeRepository(fullName: $fullName) {
+      id
+    }
+  }
+`;
+
 export default function Home() {
   const { data, loading, error } = useQuery<GetRepositoriesResponse>(GET_REPOSITORIES);
   const [markSeen] = useMutation<MarkReleaseSeenResponse, MarkReleaseSeenVariables>(
@@ -57,6 +67,12 @@ export default function Home() {
   const [refreshAll, { loading: refreshing }] = useMutation<RefreshAllResponse>(REFRESH_ALL, {
     refetchQueries: ['GetRepositories'],
   });
+  const [removeRepo] = useMutation<RemoveRepositoryResponse, RemoveRepositoryVariables>(
+    REMOVE_REPOSITORY,
+    {
+      refetchQueries: ['GetRepositories'],
+    },
+  );
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error loading repos: {error.message}</p>;
@@ -72,8 +88,18 @@ export default function Home() {
       <ul>
         {data.repositories.map((repo) => (
           <li key={repo.id}>
-            <h2>{repo.fullName}</h2>
-            <p>{repo.description}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2>{repo.fullName}</h2>
+                <p>{repo.description}</p>
+              </div>
+              <button
+                onClick={() => removeRepo({ variables: { fullName: repo.fullName } })}
+                style={{ color: 'red' }}
+              >
+                Remove
+              </button>
+            </div>
             {repo.releases.map((release) => (
               <div key={release.id} style={{ color: release.seen ? 'gray' : 'green' }}>
                 <strong>{release.version}</strong> –{' '}

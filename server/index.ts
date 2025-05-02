@@ -27,6 +27,7 @@ const typeDefs = gql`
     addRepository(fullName: String!): Repository!
     markReleaseSeen(releaseId: ID!): Release!
     refreshAllRepositories: [Repository!]!
+    removeRepository(fullName: String!): Repository!
   }
 `;
 
@@ -96,6 +97,28 @@ const resolvers = {
       }
 
       return await prisma.repository.findMany({ include: { releases: true } });
+    },
+    removeRepository: async (_: unknown, { fullName }: { fullName: string }) => {
+      const repo = await prisma.repository.findUnique({
+        where: { fullName },
+        include: { releases: true },
+      });
+
+      if (!repo) {
+        throw new Error('Repository not found');
+      }
+
+      // Delete all releases first due to foreign key constraint
+      await prisma.release.deleteMany({
+        where: { repositoryId: repo.id },
+      });
+
+      // Then delete the repository
+      await prisma.repository.delete({
+        where: { fullName },
+      });
+
+      return repo;
     },
   },
 };
