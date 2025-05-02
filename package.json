@@ -1,16 +1,27 @@
 {
   "name": "repo-tracker",
+  "version": "1.0.0",
   "private": true,
   "workspaces": [
     "client",
     "server"
   ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "setup:db": "cd server && npx prisma migrate dev",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "start": "concurrently \"npm start --prefix server\" \"npm start --prefix client\"",
+    "postinstall": "cd server && npx prisma generate"
+  },
   "devDependencies": {
     "@eslint/js": "^9.25.1",
     "eslint": "^9.25.1",
     "eslint-plugin-react": "^7.37.5",
     "globals": "^16.0.0",
     "prettier": "^3.5.3",
-    "typescript-eslint": "^8.31.1"
+    "typescript-eslint": "^8.31.1",
+    "concurrently": "^8.2.2"
   }
 }

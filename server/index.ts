@@ -1,13 +1,30 @@
 import { ApolloServer, gql } from 'apollo-server';
-import { PrismaClient, User, Repository } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { fetchRepoDetails, fetchLatestRelease } from './services/github';
 import { IncomingMessage } from 'http';
 
-const prisma = new PrismaClient();
-
 interface Context {
-  user: User;
+  user: {
+    id: string;
+    email: string;
+  };
 }
+
+interface Repository {
+  id: string;
+  name: string;
+  owner: string;
+  fullName: string;
+  description: string | null;
+}
+
+interface UserRepository {
+  userId: string;
+  repositoryId: string;
+  repository: Repository;
+}
+
+const prisma = new PrismaClient();
 
 const typeDefs = gql`
   type Repository {
@@ -54,7 +71,7 @@ const resolvers = {
         },
       });
 
-      return tracked.map((r) => r.repository);
+      return tracked.map((r: UserRepository) => r.repository);
     },
   },
 
@@ -70,17 +87,19 @@ const resolvers = {
       const seen = await prisma.seenRelease.findMany({
         where: {
           userId: user.id,
-          releaseId: { in: releases.map((r) => r.id) },
+          releaseId: { in: releases.map((r: { id: string }) => r.id) },
         },
         select: { releaseId: true },
       });
 
-      const seenSet = new Set(seen.map((s) => s.releaseId));
+      const seenSet = new Set(seen.map((s: { releaseId: string }) => s.releaseId));
 
-      return releases.map((r) => ({
-        ...r,
-        seen: seenSet.has(r.id),
-      }));
+      return releases.map(
+        (r: { id: string; version: string; publishedAt: Date; notes: string | null }) => ({
+          ...r,
+          seen: seenSet.has(r.id),
+        }),
+      );
     },
   },
 
@@ -178,7 +197,7 @@ const resolvers = {
         }
       }
 
-      return tracked.map((r) => r.repository);
+      return tracked.map((r: UserRepository) => r.repository);
     },
 
     removeRepository: async (_: unknown, { fullName }: { fullName: string }, context: Context) => {
