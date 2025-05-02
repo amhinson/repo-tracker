@@ -6,6 +6,13 @@ const ADD_REPO = gql`
     addRepository(fullName: $fullName) {
       id
       fullName
+      description
+      releases {
+        id
+        version
+        publishedAt
+        seen
+      }
     }
   }
 `;
@@ -24,14 +31,19 @@ function AddRepoForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} className="flex gap-0 max-w-md">
       <input
         value={fullName}
         onChange={(e) => setFullName(e.target.value)}
         placeholder="owner/repo"
+        className="flex-1 px-4 py-2 border rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
       />
-      <button type="submit" disabled={loading}>
-        {loading ? 'Adding...' : 'Track'}
+      <button
+        type="submit"
+        disabled={loading}
+        className="px-4 py-2 bg-blue-500 text-white rounded-r hover:bg-blue-600 disabled:opacity-50"
+      >
+        {loading ? 'Adding...' : 'Add'}
       </button>
     </form>
   );

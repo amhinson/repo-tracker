@@ -3,6 +3,7 @@ export interface Release {
   version: string;
   publishedAt: string;
   seen: boolean;
+  notes: string | null;
 }
 
 export interface Repository {
