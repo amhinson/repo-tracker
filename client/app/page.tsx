@@ -112,7 +112,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ReleaseModal handles both desktop panel and mobile modal */}
       <ReleaseModal repository={selectedRepository || null} onClose={() => setSelectedRepo(null)} />
     </div>
   );
