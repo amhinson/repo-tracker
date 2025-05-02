@@ -12,7 +12,7 @@ import {
 import AddRepoForm from './components/AddRepoForm';
 
 const GET_REPOSITORIES = gql`
-  query {
+  query GetRepositories {
     repositories {
       id
       fullName

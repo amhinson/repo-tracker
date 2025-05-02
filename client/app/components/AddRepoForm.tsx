@@ -13,7 +13,7 @@ const ADD_REPO = gql`
 function AddRepoForm() {
   const [fullName, setFullName] = useState('');
   const [addRepo, { loading }] = useMutation(ADD_REPO, {
-    refetchQueries: ['GetRepositories'], // so it updates after adding
+    refetchQueries: ['GetRepositories'],
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
