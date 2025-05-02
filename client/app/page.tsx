@@ -1,7 +1,12 @@
 'use client';
 
-import { gql, useQuery } from '@apollo/client';
-import { GetRepositoriesResponse } from './types';
+import { gql, useMutation, useQuery } from '@apollo/client';
+import {
+  GetRepositoriesResponse,
+  MarkReleaseSeenResponse,
+  MarkReleaseSeenVariables,
+  RefreshAllResponse,
+} from './types';
 import AddRepoForm from './components/AddRepoForm';
 
 const GET_REPOSITORIES = gql`
@@ -20,8 +25,38 @@ const GET_REPOSITORIES = gql`
   }
 `;
 
+const MARK_RELEASE_SEEN = gql`
+  mutation MarkReleaseSeen($releaseId: ID!) {
+    markReleaseSeen(releaseId: $releaseId) {
+      id
+      seen
+    }
+  }
+`;
+
+const REFRESH_ALL = gql`
+  mutation {
+    refreshAllRepositories {
+      id
+      fullName
+      releases {
+        id
+        version
+        seen
+        publishedAt
+      }
+    }
+  }
+`;
+
 export default function Home() {
   const { data, loading, error } = useQuery<GetRepositoriesResponse>(GET_REPOSITORIES);
+  const [markSeen] = useMutation<MarkReleaseSeenResponse, MarkReleaseSeenVariables>(
+    MARK_RELEASE_SEEN,
+  );
+  const [refreshAll, { loading: refreshing }] = useMutation<RefreshAllResponse>(REFRESH_ALL, {
+    refetchQueries: ['GetRepositories'],
+  });
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error loading repos: {error.message}</p>;
@@ -31,6 +66,9 @@ export default function Home() {
     <div>
       <AddRepoForm />
       <h1>Tracked Repositories</h1>
+      <button onClick={() => refreshAll()} disabled={refreshing}>
+        {refreshing ? 'Refreshing...' : 'Refresh All'}
+      </button>
       <ul>
         {data.repositories.map((repo) => (
           <li key={repo.id}>
@@ -39,7 +77,15 @@ export default function Home() {
             {repo.releases.map((release) => (
               <div key={release.id} style={{ color: release.seen ? 'gray' : 'green' }}>
                 <strong>{release.version}</strong> –{' '}
-                {new Date(release.publishedAt).toLocaleDateString()}
+                {new Date(parseInt(release.publishedAt)).toLocaleDateString()}
+                {!release.seen && (
+                  <button
+                    onClick={() => markSeen({ variables: { releaseId: release.id } })}
+                    style={{ marginLeft: '10px' }}
+                  >
+                    Mark as seen
+                  </button>
+                )}
               </div>
             ))}
           </li>

@@ -15,3 +15,18 @@ export interface Repository {
 export interface GetRepositoriesResponse {
   repositories: Repository[];
 }
+
+export interface MarkReleaseSeenResponse {
+  markReleaseSeen: {
+    id: string;
+    seen: boolean;
+  };
+}
+
+export interface MarkReleaseSeenVariables {
+  releaseId: string;
+}
+
+export interface RefreshAllResponse {
+  refreshAllRepositories: Repository[];
+}

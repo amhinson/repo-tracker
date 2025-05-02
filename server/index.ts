@@ -26,7 +26,7 @@ const typeDefs = gql`
   type Mutation {
     addRepository(fullName: String!): Repository!
     markReleaseSeen(releaseId: ID!): Release!
-    refreshRepository(fullName: String!): Repository!
+    refreshAllRepositories: [Repository!]!
   }
 `;
 
@@ -69,33 +69,33 @@ const resolvers = {
         data: { seen: true },
       });
     },
-    refreshRepository: async (_: unknown, { fullName }: { fullName: string }) => {
-      const latestRelease = await fetchLatestRelease(fullName);
-      if (!latestRelease)
-        return prisma.repository.findUnique({ where: { fullName }, include: { releases: true } });
+    refreshAllRepositories: async () => {
+      const allRepos = await prisma.repository.findMany();
 
-      const repo = await prisma.repository.findUnique({ where: { fullName } });
-      if (!repo) throw new Error('Repository not found');
+      for (const repo of allRepos) {
+        const latest = await fetchLatestRelease(repo.fullName);
+        if (!latest) continue;
 
-      const existingRelease = await prisma.release.findFirst({
-        where: {
-          repositoryId: repo.id,
-          version: latestRelease.version,
-        },
-      });
-
-      if (!existingRelease) {
-        await prisma.release.create({
-          data: {
-            version: latestRelease.version,
-            publishedAt: latestRelease.publishedAt,
-            notes: latestRelease.notes,
+        const existing = await prisma.release.findFirst({
+          where: {
             repositoryId: repo.id,
+            version: latest.version,
           },
         });
+
+        if (!existing) {
+          await prisma.release.create({
+            data: {
+              version: latest.version,
+              publishedAt: latest.publishedAt,
+              notes: latest.notes,
+              repositoryId: repo.id,
+            },
+          });
+        }
       }
 
-      return prisma.repository.findUnique({ where: { fullName }, include: { releases: true } });
+      return await prisma.repository.findMany({ include: { releases: true } });
     },
   },
 };
